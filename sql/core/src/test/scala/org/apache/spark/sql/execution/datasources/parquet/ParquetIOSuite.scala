@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import java.util.Collections
+
 import org.apache.parquet.column.{Encoding, ParquetProperties}
 
 import scala.collection.JavaConverters._
@@ -31,7 +33,7 @@ import org.apache.parquet.example.data.{Group, GroupWriter}
 import org.apache.parquet.hadoop._
 import org.apache.parquet.hadoop.api.WriteSupport
 import org.apache.parquet.hadoop.api.WriteSupport.WriteContext
-import org.apache.parquet.hadoop.metadata.CompressionCodecName
+import org.apache.parquet.hadoop.metadata.{FileMetaData, ParquetMetadata, CompressionCodecName}
 import org.apache.parquet.io.api.RecordConsumer
 import org.apache.parquet.schema.{MessageType, MessageTypeParser}
 
@@ -259,14 +261,20 @@ class ParquetIOSuite extends QueryTest with ParquetTest with SharedSQLContext {
         |}
       """.stripMargin)
 
-    val expectedSparkTypes = Seq(StringType, BinaryType)
-
     withTempPath { location =>
+      val extraMetadata = Map.empty[String, String].asJava
+      val fileMetadata = new FileMetaData(parquetSchema, extraMetadata, "Spark")
       val path = new Path(location.getCanonicalPath)
-      val conf = sparkContext.hadoopConfiguration
-      writeMetadata(parquetSchema, path, conf)
-      val sparkTypes = sqlContext.read.parquet(path.toString).schema.map(_.dataType)
-      assert(sparkTypes === expectedSparkTypes)
+      val footer = List(
+        new Footer(path, new ParquetMetadata(fileMetadata, Collections.emptyList()))
+      ).asJava
+
+      ParquetFileWriter.writeMetadataFile(sparkContext.hadoopConfiguration, path, footer)
+
+      val jsonDataType = sqlContext.read.parquet(path.toString).schema(0).dataType
+      assert(jsonDataType === StringType)
+      val bsonDataType = sqlContext.read.parquet(path.toString).schema(1).dataType
+      assert(bsonDataType === BinaryType)
     }
   }
 

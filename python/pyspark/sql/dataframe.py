@@ -213,7 +213,7 @@ class DataFrame(object):
 
         >>> df.explain()
         == Physical Plan ==
-        Scan PhysicalRDD[age#0,name#1]
+        Scan ExistingRDD[age#0,name#1]
 
         >>> df.explain(True)
         == Parsed Logical Plan ==
@@ -610,7 +610,7 @@ class DataFrame(object):
             If `on` is a string or a list of string indicating the name of the join column(s),
             the column(s) must exist on both sides, and this performs an inner equi-join.
         :param how: str, default 'inner'.
-            One of `inner`, `outer`, `left_outer`, `right_outer`, `semijoin`.
+            One of `inner`, `outer`, `left_outer`, `right_outer`, `leftsemi`.
 
         >>> df.join(df2, df.name == df2.name, 'outer').select(df.name, df2.height).collect()
         [Row(name=None, height=80), Row(name=u'Alice', height=None), Row(name=u'Bob', height=85)]

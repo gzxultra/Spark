@@ -18,7 +18,7 @@
 package org.apache.spark.deploy.worker.ui
 
 import java.io.File
-import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 
 import org.apache.spark.Logging
 import org.apache.spark.deploy.worker.Worker
@@ -45,12 +45,35 @@ class WorkerWebUI(
   def initialize() {
     val logPage = new LogPage(this)
     attachPage(logPage)
-    attachPage(new WorkerPage(this))
+    val workerPage = new WorkerPage(this)
+    attachPage(workerPage)
+
     attachHandler(createStaticHandler(WorkerWebUI.STATIC_RESOURCE_BASE, "/static"))
     attachHandler(createServletHandler("/log",
       (request: HttpServletRequest) => logPage.renderLog(request),
       worker.securityMgr,
       worker.conf))
+
+    val monitorPage = new MonitorPage(this)
+    attachPage(monitorPage)
+    attachHandler(createServletHandler("/monitor",
+      (request: HttpServletRequest) => monitorPage.renderMonitor(request),
+      worker.securityMgr,
+      worker.conf))
+
+    val getLog = new GetLog(this)
+    attachPage(getLog)
+    attachHandler(createServletHandler("/getlog",
+      (request: HttpServletRequest) => getLog.renderGetLog(request),
+      worker.securityMgr,
+      worker.conf))
+
+    attachHandler(createRedirectHandler(
+      "/worker/kill", "/", workerPage.handleKillRequest, httpMethods = Set("POST")))
+
+    attachHandler(createRedirectHandler(
+      "/worker/add", "/", workerPage.handleaddRequest, httpMethods = Set("POST")))
+
   }
 }
 

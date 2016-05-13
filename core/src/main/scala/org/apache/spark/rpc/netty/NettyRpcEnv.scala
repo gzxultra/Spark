@@ -30,7 +30,7 @@ import scala.reflect.ClassTag
 import scala.util.{DynamicVariable, Failure, Success, Try}
 import scala.util.control.NonFatal
 
-import org.apache.spark.{Logging, SecurityManager, SparkConf}
+import org.apache.spark.{Logging, HttpFileServer, SecurityManager, SparkConf}
 import org.apache.spark.network.TransportContext
 import org.apache.spark.network.client._
 import org.apache.spark.network.netty.SparkTransportConf
@@ -54,6 +54,13 @@ private[netty] class NettyRpcEnv(
   private val dispatcher: Dispatcher = new Dispatcher(this)
 
   private val streamManager = new NettyStreamManager(this)
+
+  private val _fileServer =
+    if (conf.getBoolean("spark.rpc.useNettyFileServer", false)) {
+      streamManager
+    } else {
+      new HttpBasedFileServer(conf, securityManager)
+    }
 
   private val transportContext = new TransportContext(transportConf,
     new NettyRpcHandler(dispatcher, this, streamManager))
@@ -232,7 +239,7 @@ private[netty] class NettyRpcEnv(
     val timeoutCancelable = timeoutScheduler.schedule(new Runnable {
       override def run(): Unit = {
         promise.tryFailure(
-          new TimeoutException("Cannot receive any reply in ${timeout.duration}"))
+          new TimeoutException(s"Cannot receive any reply in ${timeout.duration}"))
       }
     }, timeout.duration.toNanos, TimeUnit.NANOSECONDS)
     promise.future.onComplete { v =>
@@ -305,7 +312,7 @@ private[netty] class NettyRpcEnv(
     }
   }
 
-  override def fileServer: RpcEnvFileServer = streamManager
+  override def fileServer: RpcEnvFileServer = _fileServer
 
   override def openChannel(uri: String): ReadableByteChannel = {
     val parsedUri = new URI(uri)
@@ -553,6 +560,9 @@ private[netty] class NettyRpcHandler(
   // A variable to track whether we should dispatch the RemoteProcessConnected message.
   private val clients = new ConcurrentHashMap[TransportClient, JBoolean]()
 
+  // A variable to track the remote RpcEnv addresses of all clients
+  private val remoteAddresses = new ConcurrentHashMap[RpcAddress, RpcAddress]()
+
   override def receive(
       client: TransportClient,
       message: ByteBuffer,
@@ -580,6 +590,12 @@ private[netty] class NettyRpcHandler(
       // Create a new message with the socket address of the client as the sender.
       RequestMessage(clientAddr, requestMessage.receiver, requestMessage.content)
     } else {
+      // The remote RpcEnv listens to some port, we should also fire a RemoteProcessConnected for
+      // the listening address
+      val remoteEnvAddress = requestMessage.senderAddress
+      if (remoteAddresses.putIfAbsent(clientAddr, remoteEnvAddress) == null) {
+        dispatcher.postToAll(RemoteProcessConnected(remoteEnvAddress))
+      }
       requestMessage
     }
   }
@@ -591,6 +607,12 @@ private[netty] class NettyRpcHandler(
     if (addr != null) {
       val clientAddr = RpcAddress(addr.getHostName, addr.getPort)
       dispatcher.postToAll(RemoteProcessConnectionError(cause, clientAddr))
+      // If the remove RpcEnv listens to some address, we should also fire a
+      // RemoteProcessConnectionError for the remote RpcEnv listening address
+      val remoteEnvAddress = remoteAddresses.get(clientAddr)
+      if (remoteEnvAddress != null) {
+        dispatcher.postToAll(RemoteProcessConnectionError(cause, remoteEnvAddress))
+      }
     } else {
       // If the channel is closed before connecting, its remoteAddress will be null.
       // See java.net.Socket.getRemoteSocketAddress
@@ -606,6 +628,12 @@ private[netty] class NettyRpcHandler(
       val clientAddr = RpcAddress(addr.getHostName, addr.getPort)
       nettyEnv.removeOutbox(clientAddr)
       dispatcher.postToAll(RemoteProcessDisconnected(clientAddr))
+      val remoteEnvAddress = remoteAddresses.remove(clientAddr)
+      // If the remove RpcEnv listens to some address, we should also  fire a
+      // RemoteProcessDisconnected for the remote RpcEnv listening address
+      if (remoteEnvAddress != null) {
+        dispatcher.postToAll(RemoteProcessDisconnected(remoteEnvAddress))
+      }
     } else {
       // If the channel is closed before connecting, its remoteAddress will be null. In this case,
       // we can ignore it since we don't fire "Associated".

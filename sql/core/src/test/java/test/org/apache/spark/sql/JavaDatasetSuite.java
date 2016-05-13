@@ -18,6 +18,9 @@
 package test.org.apache.spark.sql;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.util.*;
 
 import scala.Tuple2;
@@ -36,6 +39,7 @@ import org.apache.spark.sql.expressions.Aggregator;
 import org.apache.spark.sql.test.TestSQLContext;
 import org.apache.spark.sql.catalyst.encoders.OuterScopes;
 import org.apache.spark.sql.catalyst.expressions.GenericRow;
+import org.apache.spark.sql.types.DecimalType;
 import org.apache.spark.sql.types.StructType;
 
 import static org.apache.spark.sql.functions.*;
@@ -386,6 +390,20 @@ public class JavaDatasetSuite implements Serializable {
   }
 
   @Test
+  public void testPrimitiveEncoder() {
+    Encoder<Tuple5<Double, BigDecimal, Date, Timestamp, Float>> encoder =
+      Encoders.tuple(Encoders.DOUBLE(), Encoders.DECIMAL(), Encoders.DATE(), Encoders.TIMESTAMP(),
+        Encoders.FLOAT());
+    List<Tuple5<Double, BigDecimal, Date, Timestamp, Float>> data =
+      Arrays.asList(new Tuple5<Double, BigDecimal, Date, Timestamp, Float>(
+        1.7976931348623157E308, new BigDecimal("0.922337203685477589"),
+          Date.valueOf("1970-01-01"), new Timestamp(System.currentTimeMillis()), Float.MAX_VALUE));
+    Dataset<Tuple5<Double, BigDecimal, Date, Timestamp, Float>> ds =
+      context.createDataset(data, encoder);
+    Assert.assertEquals(data, ds.collectAsList());
+  }
+
+  @Test
   public void testTypedAggregation() {
     Encoder<Tuple2<String, Integer>> encoder = Encoders.tuple(Encoders.STRING(), Encoders.INT());
     List<Tuple2<String, Integer>> data =
@@ -591,6 +609,44 @@ public class JavaDatasetSuite implements Serializable {
     }
   }
 
+  public class SimpleJavaBean2 implements Serializable {
+    private Timestamp a;
+    private Date b;
+    private java.math.BigDecimal c;
+
+    public Timestamp getA() { return a; }
+
+    public void setA(Timestamp a) { this.a = a; }
+
+    public Date getB() { return b; }
+
+    public void setB(Date b) { this.b = b; }
+
+    public java.math.BigDecimal getC() { return c; }
+
+    public void setC(java.math.BigDecimal c) { this.c = c; }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+
+      SimpleJavaBean that = (SimpleJavaBean) o;
+
+      if (!a.equals(that.a)) return false;
+      if (!b.equals(that.b)) return false;
+      return c.equals(that.c);
+    }
+
+    @Override
+    public int hashCode() {
+      int result = a.hashCode();
+      result = 31 * result + b.hashCode();
+      result = 31 * result + c.hashCode();
+      return result;
+    }
+  }
+
   public class NestedJavaBean implements Serializable {
     private SimpleJavaBean a;
 
@@ -671,5 +727,18 @@ public class JavaDatasetSuite implements Serializable {
     Dataset<SimpleJavaBean> ds3 = context.createDataFrame(Arrays.asList(row1, row2), schema)
       .as(Encoders.bean(SimpleJavaBean.class));
     Assert.assertEquals(data, ds3.collectAsList());
+  }
+
+  @Test
+  public void testJavaBeanEncoder2() {
+    // This is a regression test of SPARK-12404
+    OuterScopes.addOuterScope(this);
+    SimpleJavaBean2 obj = new SimpleJavaBean2();
+    obj.setA(new Timestamp(0));
+    obj.setB(new Date(0));
+    obj.setC(java.math.BigDecimal.valueOf(1));
+    Dataset<SimpleJavaBean2> ds =
+      context.createDataset(Arrays.asList(obj), Encoders.bean(SimpleJavaBean2.class));
+    ds.collect();
   }
 }

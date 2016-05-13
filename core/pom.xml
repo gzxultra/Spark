@@ -14,14 +14,14 @@
   ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   ~ See the License for the specific language governing permissions and
   ~ limitations under the License.
-  -->
+-->
 
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.apache.spark</groupId>
     <artifactId>spark-parent_2.10</artifactId>
-    <version>1.6.0-SNAPSHOT</version>
+    <version>1.6.0</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
@@ -89,7 +89,7 @@
     </dependency>
 
     <!-- Jetty dependencies promoted to compile here so they are shaded
-         and inlined into spark-core jar -->
+    and inlined into spark-core jar -->
     <dependency>
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-plus</artifactId>
@@ -126,7 +126,7 @@
       <scope>compile</scope>
     </dependency>
     <!-- Because we mark jetty as provided and shade it, its dependency
-         orbit is ignored, so we explicitly list it here (see SPARK-5557).-->
+    orbit is ignored, so we explicitly list it here (see SPARK-5557).-->
     <dependency>
       <groupId>org.eclipse.jetty.orbit</groupId>
       <artifactId>javax.servlet</artifactId>
@@ -356,6 +356,20 @@
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-test-tags_${scala.binary.version}</artifactId>
     </dependency>
+
+    <!-- add by lf -->
+<!--     <dependency>
+      <groupId>linfeng.spark</groupId>
+      <artifactId>spark-resource-monitor</artifactId>
+      <version>0.0.1-SNAPSHOT</version> 
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+      <version>2.6.0</version>
+    </dependency> -->
+
+    <!-- add by lf -->
   </dependencies>
   <build>
     <outputDirectory>target/scala-${scala.binary.version}/classes</outputDirectory>
@@ -368,77 +382,77 @@
           <!-- When using SPARK_PREPEND_CLASSES Spark classes compiled locally don't use
                shaded deps. So here we store jars in their original form which are added
                when the classpath is computed. -->
-          <execution>
-            <id>copy-dependencies</id>
-            <phase>package</phase>
-            <goals>
-              <goal>copy-dependencies</goal>
-            </goals>
-           <configuration>
-              <outputDirectory>${project.build.directory}</outputDirectory>
-              <overWriteReleases>false</overWriteReleases>
-              <overWriteSnapshots>false</overWriteSnapshots>
-              <overWriteIfNewer>true</overWriteIfNewer>
-              <useSubDirectoryPerType>true</useSubDirectoryPerType>
-              <includeArtifactIds>
-                guava,jetty-io,jetty-servlet,jetty-continuation,jetty-http,jetty-plus,jetty-util,jetty-server,jetty-security
-              </includeArtifactIds>
-              <silent>true</silent>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
-  </build>
-
-  <profiles>
-    <profile>
-      <id>Windows</id>
-      <activation>
-        <os>
-          <family>Windows</family>
-        </os>
-      </activation>
-      <properties>
-        <path.separator>\</path.separator>
-        <script.extension>.bat</script.extension>
-      </properties>
-    </profile>
-    <profile>
-      <id>unix</id>
-      <activation>
-        <os>
-          <family>unix</family>
-        </os>
-      </activation>
-      <properties>
-        <path.separator>/</path.separator>
-        <script.extension>.sh</script.extension>
-      </properties>
-    </profile>
-    <profile>
-      <id>sparkr</id>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.codehaus.mojo</groupId>
-            <artifactId>exec-maven-plugin</artifactId>
-            <executions>
-              <execution>
-                <id>sparkr-pkg</id>
-                <phase>compile</phase>
+               <execution>
+                <id>copy-dependencies</id>
+                <phase>package</phase>
                 <goals>
-                  <goal>exec</goal>
+                  <goal>copy-dependencies</goal>
                 </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}</outputDirectory>
+                  <overWriteReleases>false</overWriteReleases>
+                  <overWriteSnapshots>false</overWriteSnapshots>
+                  <overWriteIfNewer>true</overWriteIfNewer>
+                  <useSubDirectoryPerType>true</useSubDirectoryPerType>
+                  <includeArtifactIds>
+                    guava,jetty-io,jetty-servlet,jetty-continuation,jetty-http,jetty-plus,jetty-util,jetty-server,jetty-security
+                  </includeArtifactIds>
+                  <silent>true</silent>
+                </configuration>
               </execution>
             </executions>
-            <configuration>
-              <executable>..${path.separator}R${path.separator}install-dev${script.extension}</executable>
-            </configuration>
           </plugin>
         </plugins>
       </build>
-    </profile>
-  </profiles>
 
-</project>
+      <profiles>
+        <profile>
+          <id>Windows</id>
+          <activation>
+            <os>
+              <family>Windows</family>
+            </os>
+          </activation>
+          <properties>
+            <path.separator>\</path.separator>
+            <script.extension>.bat</script.extension>
+          </properties>
+        </profile>
+        <profile>
+          <id>unix</id>
+          <activation>
+            <os>
+              <family>unix</family>
+            </os>
+          </activation>
+          <properties>
+            <path.separator>/</path.separator>
+            <script.extension>.sh</script.extension>
+          </properties>
+        </profile>
+        <profile>
+          <id>sparkr</id>
+          <build>
+            <plugins>
+              <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <executions>
+                  <execution>
+                    <id>sparkr-pkg</id>
+                    <phase>compile</phase>
+                    <goals>
+                      <goal>exec</goal>
+                    </goals>
+                  </execution>
+                </executions>
+                <configuration>
+                  <executable>..${path.separator}R${path.separator}install-dev${script.extension}</executable>
+                </configuration>
+              </plugin>
+            </plugins>
+          </build>
+        </profile>
+      </profiles>
+
+    </project>

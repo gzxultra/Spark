@@ -44,7 +44,9 @@ private[spark] object SignalLogger {
           case e: Exception => log.warn("Failed to register signal handler " + signal, e)
         }
       }
-      log.info("Registered signal handlers for [" + signals.mkString(", ") + "]")
+      // log.info("Registered signal handlers for [" + signals.mkString(", ") + "]")
+      log.info("Reeeegistered signal handlers for [" + signals.mkString(", ") + "]")
+      // changed by lf
     }
   }
 }

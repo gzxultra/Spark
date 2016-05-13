@@ -16,16 +16,19 @@
  */
 
 package org.apache.spark.deploy.worker.ui
-
+import java.io._
 import scala.xml.Node
 
 import javax.servlet.http.HttpServletRequest
 import org.json4s.JValue
+import org.apache.spark.deploy.DeployMessages._
+import org.apache.spark.deploy.master.{DriverState, Master}
+import org.apache.spark.rpc._
 
 import org.apache.spark.deploy.JsonProtocol
 import org.apache.spark.deploy.DeployMessages.{RequestWorkerState, WorkerStateResponse}
 import org.apache.spark.deploy.master.DriverState
-import org.apache.spark.deploy.worker.{DriverRunner, ExecutorRunner}
+import org.apache.spark.deploy.worker.{DriverRunner, ExecutorRunner, Worker}
 import org.apache.spark.ui.{WebUIPage, UIUtils}
 import org.apache.spark.util.Utils
 
@@ -37,10 +40,69 @@ private[ui] class WorkerPage(parent: WorkerWebUI) extends WebUIPage("") {
     JsonProtocol.writeWorkerState(workerState)
   }
 
+  def handleKillRequest(request: HttpServletRequest): Unit = {
+    // val masterUrl = workerEndpoint.master.address.toSparkURL
+    val worker = parent.worker
+
+    val workerState = workerEndpoint.askWithRetry[WorkerStateResponse](RequestWorkerState)
+    val masterUrl = workerState.masterUrl
+    val appId = Option(request.getParameter("executor_appId"))
+    val executorId = Option(request.getParameter("executor_execId"))
+
+    // val killResult = workerEndpoint.askWithRetry[Boolean](KillExecutor(masterUrl, appId.get, executorId))
+    val killResult = workerEndpoint.send(KillExecutor(masterUrl, appId.get, executorId.get.toInt))
+    // val runningExecutors = workerState.executors
+
+    // override def receive: PartialFunction[Any, Unit] = synchronized {
+    // override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+
+    // var executorMemory = 1024
+    // var executorMemory = worker.conf.getOption("spark.executor.memory")
+    // worker.receive(killExecutors(Seq(executorId)))
+    var writer = new PrintWriter(new File("mylogfile.txt"))
+    writer.write({killResult.toString})
+    // writer.write("{\"status\":\"OK\",\"message\":\"%s\"}".format(killResult))
+    writer.close()
+  }
+
+  def handleaddRequest(request: HttpServletRequest): Unit = {
+    val cores = Option(request.getParameter("cores")).get.toInt
+    val memory = Option(request.getParameter("memory")).get.split(" ")(0).toDouble.toInt * 1024
+    // val appDesc = Option(request.getParameter("executor_appDesc")).get
+
+    val worker = parent.worker
+
+    var workerState = workerEndpoint.askWithRetry[WorkerStateResponse](RequestWorkerState)
+    val masterUrl = workerState.masterUrl
+    // val appId = Option(request.getParameter("executor_appId")).get
+    val executorId = workerState.executors.length + 1
+
+    val appDesc = workerState.executors(0).appDesc
+    val appId = workerState.executors(0).appId
+
+    // val appDesc = exec.askWithRetry.askWithRetry[ExecutorRunner]()
+
+    val addResult = workerEndpoint.send(LaunchExecutor(masterUrl, appId, executorId, appDesc, cores, memory))
+
+
+    // logInfo("Launching executor " + exec.executorId + " on worker " + worker.id)
+    // worker.addExecutor(exec)
+    // workerEndpoint.send(LaunchExecutor(masterUrl, appId, executorId, appDesc, cores, memory))
+    // workerState = workerEndpoint.askWithRetry[WorkerStateResponse](RequestWorkerState)
+    // val exec = workerState.executors(executorId).
+    // exec.application.driver.send(
+    //   ExecutorAdded(executorId, worker.id, worker.hostPort, cores, memory))
+
+
+    var writer = new PrintWriter(new File("mylogfile.txt"))
+    writer.write({addResult.toString})
+    writer.close()
+  }
+
   def render(request: HttpServletRequest): Seq[Node] = {
     val workerState = workerEndpoint.askWithRetry[WorkerStateResponse](RequestWorkerState)
-
-    val executorHeaders = Seq("ExecutorID", "Cores", "State", "Memory", "Job Details", "Logs")
+    // val executorHeaders = Seq("ExecutorID", "Cores", "State", "Memory", "Job Details", "Logs")
+    val executorHeaders = Seq("ExecutorID", "Cores", "State", "Memory", "Job Details", "Logs", "Resorce Monitor", "Operations")
     val runningExecutors = workerState.executors
     val runningExecutorTable =
       UIUtils.listingTable(executorHeaders, executorRow, runningExecutors)
@@ -56,6 +118,9 @@ private[ui] class WorkerPage(parent: WorkerWebUI) extends WebUIPage("") {
 
     // For now we only show driver information if the user has submitted drivers to the cluster.
     // This is until we integrate the notion of drivers and applications in the UI.
+    val confirm =
+      s"if (window.confirm('Are you sure you want to add an executor to worker ${workerState.workerId} ?')) " +
+        "{ this.parentNode.submit(); return true; } else { return false; }"
 
     val content =
       <div class="row-fluid"> <!-- Worker Details -->
@@ -73,6 +138,19 @@ private[ui] class WorkerPage(parent: WorkerWebUI) extends WebUIPage("") {
         </div>
       </div>
       <div class="row-fluid"> <!-- Executors and Drivers -->
+        <form action="worker/add/" method="POST" style="display:inline">
+          <input type="hidden" id="cores" name="cores" value={workerState.cores.toString} />
+          <input type="hidden" id="memory" name="memory" value={Utils.megabytesToString(workerState.memory)} />
+          <input type="hidden" id="worker_name" name="worker_name" value={workerState.workerId.toString} />
+          {
+          if (runningExecutors.nonEmpty) {
+              <button href="#" onclick={confirm} class="btn btn-primary add"> Add new executor! </button>
+            }
+            else {
+              <button href="#" onclick={confirm} class="btn btn-primary add" disabled="disabled"> Add new executor! </button>
+            }
+          }
+        </form>
         <div class="span12">
           <h4> Running Executors ({runningExecutors.size}) </h4>
           {runningExecutorTable}
@@ -95,12 +173,17 @@ private[ui] class WorkerPage(parent: WorkerWebUI) extends WebUIPage("") {
             }
           }
         </div>
-      </div>;
+      </div>
     UIUtils.basicSparkPage(content, "Spark Worker at %s:%s".format(
       workerState.host, workerState.port))
   }
 
   def executorRow(executor: ExecutorRunner): Seq[Node] = {
+    val workerState = workerEndpoint.askWithRetry[WorkerStateResponse](RequestWorkerState)
+    val runningExecutors = workerState.executors
+    val confirm =
+      s"if (window.confirm('Are you sure you want to kill executor ${executor.execId} ?')) " +
+        "{ this.parentNode.submit(); return true; } else { return false; }"
     <tr>
       <td>{executor.execId}</td>
       <td>{executor.cores}</td>
@@ -121,9 +204,27 @@ private[ui] class WorkerPage(parent: WorkerWebUI) extends WebUIPage("") {
      <a href={"logPage?appId=%s&executorId=%s&logType=stderr"
         .format(executor.appId, executor.execId)}>stderr</a>
       </td>
+      <td>
+        <a href={"monitorPage?appId=%s&executorId=%s"
+          .format(executor.appId, executor.execId)}>monitor</a>
+      </td>
+      <td>
+        <form action="worker/kill/" method="POST" style="display:inline">
+          <input type="hidden" id="executor_appId" name="executor_appId" value={executor.appId.toString} />
+          <input type="hidden" id="executor_execId" name="executor_execId" value={executor.execId.toString} />
+          <input type="hidden" id="executor_appDesc" name="executor_appDesc" value={executor.appDesc.toString} />
+        {
+          if (runningExecutors.nonEmpty) {
+            <button href="#" onclick={confirm} class="btn btn-danger kill"> kill </button>
+          }
+          else {
+            <button href="#" onclick={confirm} class="btn btn-danger kill" disabled="disabled"> kill </button>
+          }
+        }
+        </form>
+      </td>
     </tr>
-
-  }
+}
 
   def driverRow(driver: DriverRunner): Seq[Node] = {
     <tr>

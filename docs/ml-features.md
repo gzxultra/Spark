@@ -1,7 +1,7 @@
 ---
 layout: global
-title: Feature Extraction, Transformation, and Selection - SparkML
-displayTitle: <a href="ml-guide.html">ML</a> - Features
+title: Extracting, transforming and selecting features - spark.ml
+displayTitle: Extracting, transforming and selecting features - spark.ml
 ---
 
 This section covers algorithms for working with features, roughly divided into these groups:
@@ -63,7 +63,7 @@ the [IDF Python docs](api/python/pyspark.ml.html#pyspark.ml.feature.IDF) for mor
 `Word2VecModel`. The model maps each word to a unique fixed-size vector. The `Word2VecModel`
 transforms each document into a vector using the average of all words in the document; this vector
 can then be used for as features for prediction, document similarity calculations, etc.
-Please refer to the [MLlib user guide on Word2Vec](mllib-feature-extraction.html#Word2Vec) for more
+Please refer to the [MLlib user guide on Word2Vec](mllib-feature-extraction.html#word2vec) for more
 details.
 
 In the following code segment, we start with a set of documents, each of which is represented as a sequence of words. For each document, we transform it into a feature vector. This feature vector could then be passed to a learning algorithm.
@@ -411,7 +411,7 @@ for more details on the API.
 Refer to the [DCT Java docs](api/java/org/apache/spark/ml/feature/DCT.html)
 for more details on the API.
 
-{% include_example java/org/apache/spark/examples/ml/JavaDCTExample.java %}}
+{% include_example java/org/apache/spark/examples/ml/JavaDCTExample.java %}
 </div>
 </div>
 
@@ -420,10 +420,10 @@ for more details on the API.
 `StringIndexer` encodes a string column of labels to a column of label indices.
 The indices are in `[0, numLabels)`, ordered by label frequencies.
 So the most frequent label gets index `0`.
-If the input column is numeric, we cast it to string and index the string 
-values. When downstream pipeline components such as `Estimator` or 
-`Transformer` make use of this string-indexed label, you must set the input 
-column of the component to this string-indexed column name. In many cases, 
+If the input column is numeric, we cast it to string and index the string
+values. When downstream pipeline components such as `Estimator` or
+`Transformer` make use of this string-indexed label, you must set the input
+column of the component to this string-indexed column name. In many cases,
 you can set the input column with `setInputCol`.
 
 **Examples**
@@ -459,6 +459,42 @@ column, we should get the following:
 "a" gets index `0` because it is the most frequent, followed by "c" with index `1` and "b" with
 index `2`.
 
+Additionaly, there are two strategies regarding how `StringIndexer` will handle
+unseen labels when you have fit a `StringIndexer` on one dataset and then use it
+to transform another:
+
+- throw an exception (which is the default)
+- skip the row containing the unseen label entirely
+
+**Examples**
+
+Let's go back to our previous example but this time reuse our previously defined
+`StringIndexer` on the following dataset:
+
+~~~~
+ id | category
+----|----------
+ 0  | a
+ 1  | b
+ 2  | c
+ 3  | d
+~~~~
+
+If you've not set how `StringIndexer` handles unseen labels or set it to
+"error", an exception will be thrown.
+However, if you had called `setHandleInvalid("skip")`, the following dataset
+will be generated:
+
+~~~~
+ id | category | categoryIndex
+----|----------|---------------
+ 0  | a        | 0.0
+ 1  | b        | 2.0
+ 2  | c        | 1.0
+~~~~
+
+Notice that the row containing "d" does not appear.
+
 <div class="codetabs">
 
 <div data-lang="scala" markdown="1">
@@ -486,9 +522,78 @@ for more details on the API.
 </div>
 </div>
 
+
+## IndexToString
+
+Symmetrically to `StringIndexer`, `IndexToString` maps a column of label indices
+back to a column containing the original labels as strings. The common use case
+is to produce indices from labels with `StringIndexer`, train a model with those
+indices and retrieve the original labels from the column of predicted indices
+with `IndexToString`. However, you are free to supply your own labels.
+
+**Examples**
+
+Building on the `StringIndexer` example, let's assume we have the following
+DataFrame with columns `id` and `categoryIndex`:
+
+~~~~
+ id | categoryIndex
+----|---------------
+ 0  | 0.0
+ 1  | 2.0
+ 2  | 1.0
+ 3  | 0.0
+ 4  | 0.0
+ 5  | 1.0
+~~~~
+
+Applying `IndexToString` with `categoryIndex` as the input column,
+`originalCategory` as the output column, we are able to retrieve our original
+labels (they will be inferred from the columns' metadata):
+
+~~~~
+ id | categoryIndex | originalCategory
+----|---------------|-----------------
+ 0  | 0.0           | a
+ 1  | 2.0           | b
+ 2  | 1.0           | c
+ 3  | 0.0           | a
+ 4  | 0.0           | a
+ 5  | 1.0           | c
+~~~~
+
+<div class="codetabs">
+<div data-lang="scala" markdown="1">
+
+Refer to the [IndexToString Scala docs](api/scala/index.html#org.apache.spark.ml.feature.IndexToString)
+for more details on the API.
+
+{% include_example scala/org/apache/spark/examples/ml/IndexToStringExample.scala %}
+
+</div>
+
+<div data-lang="java" markdown="1">
+
+Refer to the [IndexToString Java docs](api/java/org/apache/spark/ml/feature/IndexToString.html)
+for more details on the API.
+
+{% include_example java/org/apache/spark/examples/ml/JavaIndexToStringExample.java %}
+
+</div>
+
+<div data-lang="python" markdown="1">
+
+Refer to the [IndexToString Python docs](api/python/pyspark.ml.html#pyspark.ml.feature.IndexToString)
+for more details on the API.
+
+{% include_example python/ml/index_to_string_example.py %}
+
+</div>
+</div>
+
 ## OneHotEncoder
 
-[One-hot encoding](http://en.wikipedia.org/wiki/One-hot) maps a column of label indices to a column of binary vectors, with at most a single one-value. This encoding allows algorithms which expect continuous features, such as Logistic Regression, to use categorical features 
+[One-hot encoding](http://en.wikipedia.org/wiki/One-hot) maps a column of label indices to a column of binary vectors, with at most a single one-value. This encoding allows algorithms which expect continuous features, such as Logistic Regression, to use categorical features
 
 <div class="codetabs">
 <div data-lang="scala" markdown="1">
@@ -564,7 +669,7 @@ for more details on the API.
 The following example demonstrates how to load a dataset in libsvm format and then normalize each row to have unit $L^2$ norm and unit $L^\infty$ norm.
 
 <div class="codetabs">
-<div data-lang="scala">
+<div data-lang="scala" markdown="1">
 
 Refer to the [Normalizer Scala docs](api/scala/index.html#org.apache.spark.ml.feature.Normalizer)
 for more details on the API.
@@ -572,7 +677,7 @@ for more details on the API.
 {% include_example scala/org/apache/spark/examples/ml/NormalizerExample.scala %}
 </div>
 
-<div data-lang="java">
+<div data-lang="java" markdown="1">
 
 Refer to the [Normalizer Java docs](api/java/org/apache/spark/ml/feature/Normalizer.html)
 for more details on the API.
@@ -580,7 +685,7 @@ for more details on the API.
 {% include_example java/org/apache/spark/examples/ml/JavaNormalizerExample.java %}
 </div>
 
-<div data-lang="python">
+<div data-lang="python" markdown="1">
 
 Refer to the [Normalizer Python docs](api/python/pyspark.ml.html#pyspark.ml.feature.Normalizer)
 for more details on the API.
@@ -604,7 +709,7 @@ Note that if the standard deviation of a feature is zero, it will return default
 The following example demonstrates how to load a dataset in libsvm format and then normalize each feature to have unit standard deviation.
 
 <div class="codetabs">
-<div data-lang="scala">
+<div data-lang="scala" markdown="1">
 
 Refer to the [StandardScaler Scala docs](api/scala/index.html#org.apache.spark.ml.feature.StandardScaler)
 for more details on the API.
@@ -612,7 +717,7 @@ for more details on the API.
 {% include_example scala/org/apache/spark/examples/ml/StandardScalerExample.scala %}
 </div>
 
-<div data-lang="java">
+<div data-lang="java" markdown="1">
 
 Refer to the [StandardScaler Java docs](api/java/org/apache/spark/ml/feature/StandardScaler.html)
 for more details on the API.
@@ -620,7 +725,7 @@ for more details on the API.
 {% include_example java/org/apache/spark/examples/ml/JavaStandardScalerExample.java %}
 </div>
 
-<div data-lang="python">
+<div data-lang="python" markdown="1">
 
 Refer to the [StandardScaler Python docs](api/python/pyspark.ml.html#pyspark.ml.feature.StandardScaler)
 for more details on the API.
@@ -683,7 +788,7 @@ More details can be found in the API docs for [Bucketizer](api/scala/index.html#
 The following example demonstrates how to bucketize a column of `Double`s into another index-wised column.
 
 <div class="codetabs">
-<div data-lang="scala">
+<div data-lang="scala" markdown="1">
 
 Refer to the [Bucketizer Scala docs](api/scala/index.html#org.apache.spark.ml.feature.Bucketizer)
 for more details on the API.
@@ -691,7 +796,7 @@ for more details on the API.
 {% include_example scala/org/apache/spark/examples/ml/BucketizerExample.scala %}
 </div>
 
-<div data-lang="java">
+<div data-lang="java" markdown="1">
 
 Refer to the [Bucketizer Java docs](api/java/org/apache/spark/ml/feature/Bucketizer.html)
 for more details on the API.
@@ -699,7 +804,7 @@ for more details on the API.
 {% include_example java/org/apache/spark/examples/ml/JavaBucketizerExample.java %}
 </div>
 
-<div data-lang="python">
+<div data-lang="python" markdown="1">
 
 Refer to the [Bucketizer Python docs](api/python/pyspark.ml.html#pyspark.ml.feature.Bucketizer)
 for more details on the API.
@@ -949,15 +1054,15 @@ for more details on the API.
 sub-array of the original features. It is useful for extracting features from a vector column.
 
 `VectorSlicer` accepts a vector column with a specified indices, then outputs a new vector column
-whose values are selected via those indices. There are two types of indices, 
+whose values are selected via those indices. There are two types of indices,
 
  1. Integer indices that represents the indices into the vector, `setIndices()`;
 
- 2. String indices that represents the names of features into the vector, `setNames()`. 
+ 2. String indices that represents the names of features into the vector, `setNames()`.
  *This requires the vector column to have an `AttributeGroup` since the implementation matches on
  the name field of an `Attribute`.*
 
-Specification by integer and string are both acceptable. Moreover, you can use integer index and 
+Specification by integer and string are both acceptable. Moreover, you can use integer index and
 string name simultaneously. At least one feature must be selected. Duplicate features are not
 allowed, so there can be no overlap between selected indices and names. Note that if names of
 features are selected, an exception will be threw out when encountering with empty input attributes.
@@ -970,9 +1075,9 @@ followed by the selected names (in the order given).
 Suppose that we have a DataFrame with the column `userFeatures`:
 
 ~~~
- userFeatures     
+ userFeatures
 ------------------
- [0.0, 10.0, 0.5] 
+ [0.0, 10.0, 0.5]
 ~~~
 
 `userFeatures` is a vector column that contains three user features. Assuming that the first column
@@ -986,7 +1091,7 @@ column named `features`:
  [0.0, 10.0, 0.5] | [10.0, 0.5]
 ~~~
 
-Suppose also that we have a potential input attributes for the `userFeatures`, i.e. 
+Suppose also that we have a potential input attributes for the `userFeatures`, i.e.
 `["f1", "f2", "f3"]`, then we can use `setNames("f2", "f3")` to select them.
 
 ~~~

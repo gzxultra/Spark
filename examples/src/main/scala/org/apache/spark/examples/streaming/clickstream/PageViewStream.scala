@@ -86,10 +86,8 @@ object PageViewStream {
                                    .map("Unique active users: " + _)
 
     // An external dataset we want to join to this stream
-    val userList = ssc.sparkContext.parallelize(Seq(
-      1 -> "Patrick Wendell",
-      2 -> "Reynold Xin",
-      3 -> "Matei Zaharia"))
+    val userList = ssc.sparkContext.parallelize(
+       Map(1 -> "Patrick Wendell", 2 -> "Reynold Xin", 3 -> "Matei Zaharia").toSeq)
 
     metric match {
       case "pageCounts" => pageCounts.print()

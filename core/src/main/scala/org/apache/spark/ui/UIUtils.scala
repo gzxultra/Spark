@@ -153,11 +153,10 @@ private[spark] object UIUtils extends Logging {
     uiRoot + basePath + resource
   }
 
+
   def commonHeaderNodes: Seq[Node] = {
     <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
-    <link rel="stylesheet" href={prependBaseUri("/static/bootstrap.min.css")} type="text/css"/>
     <link rel="stylesheet" href={prependBaseUri("/static/vis.min.css")} type="text/css"/>
-    <link rel="stylesheet" href={prependBaseUri("/static/webui.css")} type="text/css"/>
     <link rel="stylesheet" href={prependBaseUri("/static/timeline-view.css")} type="text/css"/>
     <script src={prependBaseUri("/static/sorttable.js")} ></script>
     <script src={prependBaseUri("/static/jquery-1.11.1.min.js")}></script>
@@ -167,6 +166,16 @@ private[spark] object UIUtils extends Logging {
     <script src={prependBaseUri("/static/table.js")}></script>
     <script src={prependBaseUri("/static/additional-metrics.js")}></script>
     <script src={prependBaseUri("/static/timeline-view.js")}></script>
+    <script src={prependBaseUri("/static/d3.min.js")}></script>
+    <link rel="stylesheet" href={prependBaseUri("/static/monitor.css")} type="text/css"/>
+    <script src={prependBaseUri("/static/jquery-1.11.1.min.js")}></script>
+    <script src={prependBaseUri("/static/echarts.min.js")}></script>
+    <link rel="stylesheet" href={prependBaseUri("/static/bootstrap.min.css")} type="text/css"/>
+    <link rel="stylesheet" href={prependBaseUri("/static/webui.css")} type="text/css"/>
+  }
+
+  def customScriptAddOn: Seq[Node] = {
+    <script src={prependBaseUri("/static/monitor.js")}></script>
   }
 
   def vizHeaderNodes: Seq[Node] = {
@@ -448,7 +457,6 @@ private[spark] object UIUtils extends Logging {
       new RuleTransformer(rule).transform(xml)
     } catch {
       case NonFatal(e) =>
-        logWarning(s"Invalid job description: $desc ", e)
         <span class="description-input">{desc}</span>
     }
   }

@@ -1248,10 +1248,6 @@ def get_ip_address(instance, private_ips=False):
 def get_dns_name(instance, private_ips=False):
     dns = instance.public_dns_name if not private_ips else \
         instance.private_ip_address
-    if not dns:
-        raise UsageError("Failed to determine hostname of {0}.\n"
-                         "Please check that you provided --private-ips if "
-                         "necessary".format(instance))
     return dns
 
 
