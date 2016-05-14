@@ -1,0 +1,25 @@
+body {
+	font: 10px sans-serif;
+}
+.axis path,
+.axis line {
+	fill: none;
+	stroke: #000;
+	shape-rendering: crispEdges;
+	stroke-width: 1.5px;
+}
+.line {
+	fill: none;
+	stroke: steelblue;
+	stroke-width: 2.5px;
+}
+.y.axis line {
+	stroke: #777;
+	stroke-dasharray: 2,2;
+}
+.y.axis path {
+	diplay : none
+}
+.MyRect {
+	fill: white
+}
